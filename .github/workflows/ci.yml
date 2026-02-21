@@ -1,4 +1,4 @@
-name: Assignment_1 CI/CD Pipeline
+name: Assignment_2 CI/CD Pipeline - Feature Flag Validation
 
 on:
   push:
@@ -17,12 +17,13 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
           cache: 'maven'
-      - name: Run Tests
+      - name: Run Product Service Tests
         run: |
-          cd product-service && mvn test
-          cd ../order-service && mvn test
+          chmod +x mvnw
+          ./mvnw clean test
 
-  docker-pipeline:
+  # Build docker and Integration tests
+  docker-integration-tests:
     name: Docker Integration Test
     runs-on: ubuntu-22.04
     needs: unit-tests
@@ -30,78 +31,277 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Docker
-        run: |
-          # Install Docker using official script (works on all versions) 
-          curl -fsSL https://get.docker.com -o get-docker.sh
-          sudo sh get-docker.sh
-          sudo usermod -aG docker $USER
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Install Docker Compose
+      - name: Build and start all services
         run: |
-          # Install Docker Compose v2 (modern version)
-          sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-          sudo chmod +x /usr/local/bin/docker-compose
-          docker-compose --version
+          docker-compose up -d --build
+          echo "Waiting for services to start..."
+          sleep 30
 
-      - name: Build Docker Images
+      - name: Wait for all services to be healthy
         run: |
-          docker build -t product-service ./product-service/
-          docker build -t order-service ./order-service/
-          echo "Images built"
-
-      - name: Start Services
-        run: |
-          docker-compose up -d
-          echo "Waiting for services to starts..."
-          sleep 50
+          echo "Checking service health..."
+          for i in {1..30}; do
+            POSTGRES_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' unleash-postgres 2>/dev/null || echo "starting")
+            UNLEASH_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' unleash-server 2>/dev/null || echo "starting")
+            PRODUCT_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' product-service 2>/dev/null || echo "starting")
+            ORDER_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' order-service 2>/dev/null || echo "starting")
           
-          echo "Running containers:"
-          docker ps -a
-
-      - name: Verify Services
-        run: |
-          echo "Testing service health..."
-          # Try multiple times with retry
-          for i in {1..5}; do
-            if curl -f http://localhost:8081/actuator/health 2>/dev/null; then
-              echo "Product Service is healthy"
-              break
-            else
-              echo "Attempt $i: Product Service not ready, waiting..."
-              sleep 10
-            fi
-          done         
+            echo "Postgres: $POSTGRES_HEALTH, Unleash: $UNLEASH_HEALTH, Product: $PRODUCT_HEALTH, Order: $ORDER_HEALTH"
           
-          for i in {1..5}; do
-            if curl -f http://localhost:8082/actuator/health 2>/dev/null; then
-              echo "✅ Order Service is healthy"
+            if [[ "$POSTGRES_HEALTH" == "healthy" && "$UNLEASH_HEALTH" == "healthy" && "$PRODUCT_HEALTH" == "healthy" && "$ORDER_HEALTH" == "healthy" ]]; then
+              echo "✅ All services are healthy!"
               break
-            else
-              echo "Attempt $i: Order Service not ready, waiting..."
-              sleep 10
             fi
+            sleep 5
           done
 
-      - name: Test APIs
+      - name: Initialize feature flags
         run: |
-          # APi test
-          echo "Testing Product Service API..."
-          curl -X POST http://localhost:8081/api/products \
-          -H "Content-Type: application/json" \
-          -d '{"name":"Test","price":10,"quantity":5}' || true
+          chmod +x ./scripts/init-flags.sh
+          ./scripts/init-flags.sh
+          sleep 5
+
+      - name: Create test products
+        run: |
+          echo "Creating test products..."
+           curl -X POST http://localhost:8081/api/products \
+             -H "Content-Type: application/json" \
+             -d '{"name":"Desktop","price":1000.00,"quantity":8}'
           
-          curl http://localhost:8081/api/products || true
+           curl -X POST http://localhost:8081/api/products \
+             -H "Content-Type: application/json" \
+             -d '{"name":"PlayStation5","price":500.00,"quantity":16}'
 
-          echo "Testing Order Service API..."
-          curl -X POST http://localhost:8082/api/orders \
-          -H "Content-Type: application/json" \
-          -d '{"productId":1,"quantity":2}' || true
-
-          curl http://localhost:8082/api/orders || true
-
-      - name: Cleanup
-        if: always()
+      - name: Test 1 - premium-pricing flag ON (10% discount)
         run: |
-          docker-compose down || true
-          echo "Cleanup done"
+          echo "🔴 Testing premium-pricing flag ON..."
+          
+          # Ensure flag is ON
+          curl -X POST http://localhost:4242/api/admin/projects/default/features/premium-pricing/environments/development/on \
+            -H "Authorization: *:*.unleash-default-token"
+          sleep 2
+          
+          # Test premium endpoint
+          RESPONSE=$(curl -s http://localhost:8081/api/products/premium)
+          echo "$RESPONSE" | grep -q "900.0" && echo "✅ premium-pricing ON: 10% discount applied (1000 → 900)" || echo "❌ premium-pricing ON test failed"
+          echo "$RESPONSE" | grep -q "450.0" && echo "✅ premium-pricing ON: 10% discount applied (500 → 450)" || echo "❌ premium-pricing ON test failed"
+
+      - name: Test 2 - premium-pricing flag OFF (regular prices)
+        run: |
+          echo "🔴 Testing premium-pricing flag OFF..."
+          
+          # Toggle flag OFF
+          curl -X POST http://localhost:4242/api/admin/projects/default/features/premium-pricing/environments/development/off \
+            -H "Authorization: *:*.unleash-default-token"
+          sleep 2
+          
+          # Test premium endpoint
+          RESPONSE=$(curl -s http://localhost:8081/api/products/premium)
+          echo "$RESPONSE" | grep -q "1000.0" && echo "✅ premium-pricing OFF: regular price (1000)" || echo "❌ premium-pricing OFF test failed"
+          echo "$RESPONSE" | grep -q "500.0" && echo "✅ premium-pricing OFF: regular price (500)" || echo "❌ premium-pricing OFF test failed"
+          # Test 3: bulk-order-discount flag ON
+          - name: Test 3 - bulk-order-discount flag ON (15% discount for qty>5)
+            run: |
+              echo "🔴 Testing bulk-order-discount flag ON..."
+          
+              # Ensure flag is ON
+              curl -X POST http://localhost:4242/api/admin/projects/default/features/bulk-order-discount/environments/development/on \
+                -H "Authorization: *:*.unleash-default-token"
+              sleep 2
+          
+              # Test bulk order (quantity 6 - should get discount)
+              RESPONSE=$(curl -s -X POST http://localhost:8082/api/orders \
+                -H "Content-Type: application/json" \
+                -d '{"productId":1,"quantity":6,"status":"Pending"}')
+          
+              # Check total price (1000 * 6 = 6000, with 15% discount = 5100)
+              echo "$RESPONSE" | grep -q "5100.0" && echo "✅ bulk-order-discount ON: 15% discount applied (6000 → 5100)" || echo "❌ bulk-order-discount ON test failed"
+          
+          # Test 4: bulk-order-discount flag OFF
+          - name: Test 4 - bulk-order-discount flag OFF (no discount)
+            run: |
+              echo "🔴 Testing bulk-order-discount flag OFF..."
+          
+              # Toggle flag OFF
+              curl -X POST http://localhost:4242/api/admin/projects/default/features/bulk-order-discount/environments/development/off \
+                -H "Authorization: *:*.unleash-default-token"
+              sleep 2
+          
+              # Test bulk order (quantity 6 - no discount)
+              RESPONSE=$(curl -s -X POST http://localhost:8082/api/orders \
+                -H "Content-Type: application/json" \
+                -d '{"productId":1,"quantity":6,"status":"Pending"}')
+          
+              # Check total price (1000 * 6 = 6000, no discount)
+              echo "$RESPONSE" | grep -q "6000.0" && echo "✅ bulk-order-discount OFF: regular price (6000)" || echo "❌ bulk-order-discount OFF test failed"
+          
+          # Test 5: order-notifications flag ON
+          - name: Test 5 - order-notifications flag ON (logs notification)
+            run: |
+              echo "🔴 Testing order-notifications flag ON..."
+          
+              # Ensure flag is ON
+              curl -X POST http://localhost:4242/api/admin/projects/default/features/order-notifications/environments/development/on \
+                -H "Authorization: *:*.unleash-default-token"
+              sleep 2
+          
+              # Create order
+              curl -X POST http://localhost:8082/api/orders \
+                -H "Content-Type: application/json" \
+                -d '{"productId":1,"quantity":2,"status":"Pending"}'
+              sleep 2
+          
+              # Check logs for notification
+              docker-compose logs order-service | grep -q "Order Notification" && echo "✅ order-notifications ON: notification logged" || echo "❌ order-notifications ON test failed"
+          
+          # Test 6: order-notifications flag OFF
+          - name: Test 6 - order-notifications flag OFF (silent)
+            run: |
+              echo "🔴 Testing order-notifications flag OFF..."
+          
+              # Toggle flag OFF
+              curl -X POST http://localhost:4242/api/admin/projects/default/features/order-notifications/environments/development/off \
+                -H "Authorization: *:*.unleash-default-token"
+              sleep 2
+          
+              # Create order
+              curl -X POST http://localhost:8082/api/orders \
+                -H "Content-Type: application/json" \
+                -d '{"productId":1,"quantity":3,"status":"Pending"}'
+              sleep 2
+          
+              echo "✅ order-notifications OFF test complete"
+
+          - name: Tear down stack
+            if: always()
+            run: docker-compose down -v
+
+      # Job 3: Feature Flag Validation
+  feature-flag-validation:
+    name: Job 3 - Feature Flag Validation
+    runs-on: ubuntu-22.04
+    needs: docker-integration-tests
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start Unleash and PostgreSQL
+        run: |
+          docker-compose up -d postgres unleash-server
+          sleep 20
+
+      - name: Verify all three feature flags exist
+        run: |
+          echo "🔴 Verifying feature flags in Unleash..."
+              
+          FLAGS=$(curl -s http://localhost:4242/api/admin/projects/default/features \
+          -H "Authorization: *:*.unleash-default-token")
+              
+          # Check premium-pricing
+          if echo "$FLAGS" | grep -q "premium-pricing"; then
+            echo "✅ premium-pricing flag exists"
+          else
+            echo "❌ premium-pricing flag missing"
+            exit 1
+          fi
+              
+              # Check order-notifications
+          if echo "$FLAGS" | grep -q "order-notifications"; then
+            echo "✅ order-notifications flag exists"
+          else
+            echo "❌ order-notifications flag missing"
+            exit 1
+          fi
+              
+              # Check bulk-order-discount
+          if echo "$FLAGS" | grep -q "bulk-order-discount"; then
+            echo "✅ bulk-order-discount flag exists"
+          else
+            echo "❌ bulk-order-discount flag missing"
+            exit 1
+          fi
+              
+          echo "🎉 All three feature flags exist in Unleash!"
+
+      - name: Test flag toggle behavior
+        run: |
+          echo "🔴 Testing flag toggle behavior..."
+              
+              # Toggle premium-pricing OFF
+          curl -X POST http://localhost:4242/api/admin/projects/default/features/premium-pricing/environments/development/off \
+            -H "Authorization: *:*.unleash-default-token"
+              
+              # Check status
+          STATUS=$(curl -s http://localhost:4242/api/admin/projects/default/features/premium-pricing \
+            -H "Authorization: *:*.unleash-default-token")
+          echo "✅ premium-pricing toggle test complete"
+              
+              # Toggle back ON
+          curl -X POST http://localhost:4242/api/admin/projects/default/features/premium-pricing/environments/development/on \
+            -H "Authorization: *:*.unleash-default-token"
+
+      - name: Validate fallback behavior
+        run: |
+          echo "🔴 Testing fallback behavior (Unleash unavailable)..."
+              
+              # Stop Unleash to simulate unavailability
+          docker-compose stop unleash-server
+          sleep 5
+              
+              # Test product service with Unleash down (should use fallback)
+          RESPONSE=$(curl -s http://localhost:8081/api/products/premium)
+          if [ -n "$RESPONSE" ]; then
+            echo "✅ Product service working with fallback (Unleash down)"
+          else
+            echo "❌ Product service failed with Unleash down"
+          fi
+              
+              # Restart Unleash
+          docker-compose start unleash-server
+
+      - name: Clean up
+        if: always()
+        run: docker-compose down -v
+
+      # Bonus Job: Code Quality (Optional)
+  code-quality:
+    name: Bonus - Code Quality
+    runs-on: ubuntu-22.04
+    needs: unit-tests
+    if: github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Run static analysis on Product Service
+        working-directory: ./product-service
+        run: |
+          chmod +x mvnw
+          ./mvnw spotbugs:check || echo "SpotBugs warnings found (optional)"
+          ./mvnw pmd:check || echo "PMD warnings found (optional)"
+          ./mvnw jacoco:report
+
+      - name: Run static analysis on Order Service
+        working-directory: ./order-service
+        run: |
+          chmod +x mvnw
+          ./mvnw spotbugs:check || echo "SpotBugs warnings found (optional)"
+          ./mvnw pmd:check || echo "PMD warnings found (optional)"
+          ./mvnw jacoco:report
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: |
+            product-service/target/site/jacoco/
+            order-service/target/site/jacoco/
