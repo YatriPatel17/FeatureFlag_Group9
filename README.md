@@ -1,7 +1,7 @@
 #Feature Flag Implementation with Unleash
 
 ## Overview:
- - The project builds upon the e-commerce microservices system that was developed in Assignment one by deploying feature flags with Unleash as the feature flag management server. The system has three feature flags and two microservices Product service and Order Service, which manage different features.
+ - The project builds upon the e-commerce microservices system that was developed in Assignment One by deploying feature flags with Unleash as the feature flag management server. The system has three feature flags and two microservices, Product Service and Order Service, which manage different features.
 
 # setup requirements:
 - Java JDK21
@@ -26,17 +26,17 @@
 ### Feature Flags
 - premium-pricing
     Service - Product Service
-    Description - When flag enabled, it applies 10% discount to all product
+    Description - When the flag is enabled, it applies 10% discount to all products
 - bulk-order-discount
     Service - Order Service
-    Description - When flag is enabled, it applies 15% discount for more than 5 items.
+    Description - When the flag is enabled, it applies a 15% discount for more than 5 items.
 - order-notifications
     Service - Order Service
-    Description - When flag is enabled, logs order confirmation notifications
-- 
+    Description - When the flag is enabled, logs order confirmation notifications
+  
 # Running Application
 1. Clone the repository
-2. Start all service using
+2. Start all services using
     docker-compose up --build
 3. Initialize feature flags
     navigate the command in git bash
@@ -48,7 +48,7 @@
     URL: http://localhost:4242
     Username: admin
     Password: unleash4all
-6. you can use this ui to toggle feature flags, and you can see real-time behavior changes.
+6. You can use this ui to toggle feature flags, and you can see real-time behavior changes.
 7. Run unit tests locally
     For product Service
     cd product-service
@@ -58,7 +58,7 @@
     cd ../order-service OR cd order-service
     ./mvnw clean test
 
-- The project includes a GitHUb Actions pipeline
+- The project includes a GitHub Actions pipeline
 
 GitHub repository Link:- https://github.com/YatriPatel17/FeatureFlag_Group9
    
