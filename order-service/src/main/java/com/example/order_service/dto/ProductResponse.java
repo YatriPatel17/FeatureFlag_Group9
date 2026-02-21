@@ -40,6 +40,5 @@ public class ProductResponse {
         this.quantity = quantity;
     }
 
-
 }
 
