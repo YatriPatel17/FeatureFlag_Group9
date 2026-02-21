@@ -191,7 +191,7 @@ jobs:
         run: docker-compose down -v
 
   feature-flag-validation:
-    name: Job 3 - Feature Flag Validation
+    name: Feature Flag Validation
     runs-on: ubuntu-22.04
     needs: docker-integration-tests
 
@@ -208,6 +208,12 @@ jobs:
         run: |
           docker-compose up -d postgres unleash-server
           sleep 20
+
+      - name: Initialize feature flags
+        run: |
+          chmod +x ./scripts/init-flags.sh
+          ./scripts/init-flags.sh
+          sleep 5
 
       - name: Verify all three feature flags exist
         run: |
