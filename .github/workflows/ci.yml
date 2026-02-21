@@ -8,15 +8,17 @@ on:
 
 jobs:
   unit-tests:
-    name: Unite Tests
+    name: Unit Tests
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
           cache: 'maven'
+
       - name: Run Product Service Tests
         working-directory: ./product-service
         run: |
@@ -29,7 +31,6 @@ jobs:
           chmod +x mvnw
           ./mvnw clean test
 
-  # Build docker and Integration tests
   docker-integration-tests:
     name: Docker Integration Test
     runs-on: ubuntu-22.04
@@ -40,6 +41,12 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Install Docker Compose
+        run: |
+          sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          docker-compose --version
 
       - name: Build and start all services
         run: |
@@ -74,13 +81,13 @@ jobs:
       - name: Create test products
         run: |
           echo "Creating test products..."
-           curl -X POST http://localhost:8081/api/products \
-             -H "Content-Type: application/json" \
-             -d '{"name":"Desktop","price":1000.00,"quantity":8}'
+          curl -X POST http://localhost:8081/api/products \
+            -H "Content-Type: application/json" \
+            -d '{"name":"Desktop","price":1000.00,"quantity":8}'
           
-           curl -X POST http://localhost:8081/api/products \
-             -H "Content-Type: application/json" \
-             -d '{"name":"PlayStation5","price":500.00,"quantity":16}'
+          curl -X POST http://localhost:8081/api/products \
+            -H "Content-Type: application/json" \
+            -d '{"name":"PlayStation5","price":500.00,"quantity":16}'
 
       - name: Test 1 - premium-pricing flag ON (10% discount)
         run: |
@@ -109,84 +116,80 @@ jobs:
           RESPONSE=$(curl -s http://localhost:8081/api/products/premium)
           echo "$RESPONSE" | grep -q "1000.0" && echo "✅ premium-pricing OFF: regular price (1000)" || echo "❌ premium-pricing OFF test failed"
           echo "$RESPONSE" | grep -q "500.0" && echo "✅ premium-pricing OFF: regular price (500)" || echo "❌ premium-pricing OFF test failed"
-          # Test 3: bulk-order-discount flag ON
-          - name: Test 3 - bulk-order-discount flag ON (15% discount for qty>5)
-            run: |
-              echo "🔴 Testing bulk-order-discount flag ON..."
-          
-              # Ensure flag is ON
-              curl -X POST http://localhost:4242/api/admin/projects/default/features/bulk-order-discount/environments/development/on \
-                -H "Authorization: *:*.unleash-default-token"
-              sleep 2
-          
-              # Test bulk order (quantity 6 - should get discount)
-              RESPONSE=$(curl -s -X POST http://localhost:8082/api/orders \
-                -H "Content-Type: application/json" \
-                -d '{"productId":1,"quantity":6,"status":"Pending"}')
-          
-              # Check total price (1000 * 6 = 6000, with 15% discount = 5100)
-              echo "$RESPONSE" | grep -q "5100.0" && echo "✅ bulk-order-discount ON: 15% discount applied (6000 → 5100)" || echo "❌ bulk-order-discount ON test failed"
-          
-          # Test 4: bulk-order-discount flag OFF
-          - name: Test 4 - bulk-order-discount flag OFF (no discount)
-            run: |
-              echo "🔴 Testing bulk-order-discount flag OFF..."
-          
-              # Toggle flag OFF
-              curl -X POST http://localhost:4242/api/admin/projects/default/features/bulk-order-discount/environments/development/off \
-                -H "Authorization: *:*.unleash-default-token"
-              sleep 2
-          
-              # Test bulk order (quantity 6 - no discount)
-              RESPONSE=$(curl -s -X POST http://localhost:8082/api/orders \
-                -H "Content-Type: application/json" \
-                -d '{"productId":1,"quantity":6,"status":"Pending"}')
-          
-              # Check total price (1000 * 6 = 6000, no discount)
-              echo "$RESPONSE" | grep -q "6000.0" && echo "✅ bulk-order-discount OFF: regular price (6000)" || echo "❌ bulk-order-discount OFF test failed"
-          
-          # Test 5: order-notifications flag ON
-          - name: Test 5 - order-notifications flag ON (logs notification)
-            run: |
-              echo "🔴 Testing order-notifications flag ON..."
-          
-              # Ensure flag is ON
-              curl -X POST http://localhost:4242/api/admin/projects/default/features/order-notifications/environments/development/on \
-                -H "Authorization: *:*.unleash-default-token"
-              sleep 2
-          
-              # Create order
-              curl -X POST http://localhost:8082/api/orders \
-                -H "Content-Type: application/json" \
-                -d '{"productId":1,"quantity":2,"status":"Pending"}'
-              sleep 2
-          
-              # Check logs for notification
-              docker-compose logs order-service | grep -q "Order Notification" && echo "✅ order-notifications ON: notification logged" || echo "❌ order-notifications ON test failed"
-          
-          # Test 6: order-notifications flag OFF
-          - name: Test 6 - order-notifications flag OFF (silent)
-            run: |
-              echo "🔴 Testing order-notifications flag OFF..."
-          
-              # Toggle flag OFF
-              curl -X POST http://localhost:4242/api/admin/projects/default/features/order-notifications/environments/development/off \
-                -H "Authorization: *:*.unleash-default-token"
-              sleep 2
-          
-              # Create order
-              curl -X POST http://localhost:8082/api/orders \
-                -H "Content-Type: application/json" \
-                -d '{"productId":1,"quantity":3,"status":"Pending"}'
-              sleep 2
-          
-              echo "✅ order-notifications OFF test complete"
 
-          - name: Tear down stack
-            if: always()
-            run: docker-compose down -v
+      - name: Test 3 - bulk-order-discount flag ON (15% discount for qty>5)
+        run: |
+          echo "🔴 Testing bulk-order-discount flag ON..."
+          
+          # Ensure flag is ON
+          curl -X POST http://localhost:4242/api/admin/projects/default/features/bulk-order-discount/environments/development/on \
+            -H "Authorization: *:*.unleash-default-token"
+          sleep 2
+          
+          # Test bulk order (quantity 6 - should get discount)
+          RESPONSE=$(curl -s -X POST http://localhost:8082/api/orders \
+            -H "Content-Type: application/json" \
+            -d '{"productId":1,"quantity":6,"status":"Pending"}')
+          
+          # Check total price (1000 * 6 = 6000, with 15% discount = 5100)
+          echo "$RESPONSE" | grep -q "5100.0" && echo "✅ bulk-order-discount ON: 15% discount applied (6000 → 5100)" || echo "❌ bulk-order-discount ON test failed"
 
-      # Job 3: Feature Flag Validation
+      - name: Test 4 - bulk-order-discount flag OFF (no discount)
+        run: |
+          echo "🔴 Testing bulk-order-discount flag OFF..."
+          
+          # Toggle flag OFF
+          curl -X POST http://localhost:4242/api/admin/projects/default/features/bulk-order-discount/environments/development/off \
+            -H "Authorization: *:*.unleash-default-token"
+          sleep 2
+          
+          # Test bulk order (quantity 6 - no discount)
+          RESPONSE=$(curl -s -X POST http://localhost:8082/api/orders \
+            -H "Content-Type: application/json" \
+            -d '{"productId":1,"quantity":6,"status":"Pending"}')
+          
+          # Check total price (1000 * 6 = 6000, no discount)
+          echo "$RESPONSE" | grep -q "6000.0" && echo "✅ bulk-order-discount OFF: regular price (6000)" || echo "❌ bulk-order-discount OFF test failed"
+
+      - name: Test 5 - order-notifications flag ON (logs notification)
+        run: |
+          echo "🔴 Testing order-notifications flag ON..."
+          
+          # Ensure flag is ON
+          curl -X POST http://localhost:4242/api/admin/projects/default/features/order-notifications/environments/development/on \
+            -H "Authorization: *:*.unleash-default-token"
+          sleep 2
+          
+          # Create order
+          curl -X POST http://localhost:8082/api/orders \
+            -H "Content-Type: application/json" \
+            -d '{"productId":1,"quantity":2,"status":"Pending"}'
+          sleep 2
+          
+          # Check logs for notification
+          docker-compose logs order-service | grep -q "Order Notification" && echo "✅ order-notifications ON: notification logged" || echo "❌ order-notifications ON test failed"
+
+      - name: Test 6 - order-notifications flag OFF (silent)
+        run: |
+          echo "🔴 Testing order-notifications flag OFF..."
+          
+          # Toggle flag OFF
+          curl -X POST http://localhost:4242/api/admin/projects/default/features/order-notifications/environments/development/off \
+            -H "Authorization: *:*.unleash-default-token"
+          sleep 2
+          
+          # Create order
+          curl -X POST http://localhost:8082/api/orders \
+            -H "Content-Type: application/json" \
+            -d '{"productId":1,"quantity":3,"status":"Pending"}'
+          sleep 2
+          
+          echo "✅ order-notifications OFF test complete"
+
+      - name: Tear down stack
+        if: always()
+        run: docker-compose down -v
+
   feature-flag-validation:
     name: Job 3 - Feature Flag Validation
     runs-on: ubuntu-22.04
@@ -194,6 +197,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install Docker Compose
+        run: |
+          sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          docker-compose --version
 
       - name: Start Unleash and PostgreSQL
         run: |
@@ -203,10 +212,10 @@ jobs:
       - name: Verify all three feature flags exist
         run: |
           echo "🔴 Verifying feature flags in Unleash..."
-              
+          
           FLAGS=$(curl -s http://localhost:4242/api/admin/projects/default/features \
-          -H "Authorization: *:*.unleash-default-token")
-              
+            -H "Authorization: *:*.unleash-default-token")
+          
           # Check premium-pricing
           if echo "$FLAGS" | grep -q "premium-pricing"; then
             echo "✅ premium-pricing flag exists"
@@ -214,101 +223,60 @@ jobs:
             echo "❌ premium-pricing flag missing"
             exit 1
           fi
-              
-              # Check order-notifications
+          
+          # Check order-notifications
           if echo "$FLAGS" | grep -q "order-notifications"; then
             echo "✅ order-notifications flag exists"
           else
             echo "❌ order-notifications flag missing"
             exit 1
           fi
-              
-              # Check bulk-order-discount
+          
+          # Check bulk-order-discount
           if echo "$FLAGS" | grep -q "bulk-order-discount"; then
             echo "✅ bulk-order-discount flag exists"
           else
             echo "❌ bulk-order-discount flag missing"
             exit 1
           fi
-              
+          
           echo "🎉 All three feature flags exist in Unleash!"
 
       - name: Test flag toggle behavior
         run: |
           echo "🔴 Testing flag toggle behavior..."
-              
-              # Toggle premium-pricing OFF
+          
+          # Toggle premium-pricing OFF
           curl -X POST http://localhost:4242/api/admin/projects/default/features/premium-pricing/environments/development/off \
             -H "Authorization: *:*.unleash-default-token"
-              
-              # Check status
-          STATUS=$(curl -s http://localhost:4242/api/admin/projects/default/features/premium-pricing \
-            -H "Authorization: *:*.unleash-default-token")
-          echo "✅ premium-pricing toggle test complete"
-              
-              # Toggle back ON
+          
+          # Check status
+          curl -s http://localhost:4242/api/admin/projects/default/features/premium-pricing \
+            -H "Authorization: *:*.unleash-default-token" | grep -q "enabled" && echo "✅ premium-pricing toggle test complete"
+          
+          # Toggle back ON
           curl -X POST http://localhost:4242/api/admin/projects/default/features/premium-pricing/environments/development/on \
             -H "Authorization: *:*.unleash-default-token"
 
       - name: Validate fallback behavior
         run: |
           echo "🔴 Testing fallback behavior (Unleash unavailable)..."
-              
-              # Stop Unleash to simulate unavailability
+          
+          # Stop Unleash to simulate unavailability
           docker-compose stop unleash-server
           sleep 5
-              
-              # Test product service with Unleash down (should use fallback)
+          
+          # Test product service with Unleash down (should use fallback)
           RESPONSE=$(curl -s http://localhost:8081/api/products/premium)
           if [ -n "$RESPONSE" ]; then
             echo "✅ Product service working with fallback (Unleash down)"
           else
             echo "❌ Product service failed with Unleash down"
           fi
-              
-              # Restart Unleash
+          
+          # Restart Unleash
           docker-compose start unleash-server
 
       - name: Clean up
         if: always()
         run: docker-compose down -v
-
-      # Bonus Job: Code Quality (Optional)
-  code-quality:
-    name: Bonus - Code Quality
-    runs-on: ubuntu-22.04
-    needs: unit-tests
-    if: github.event_name == 'push'
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-
-      - name: Run static analysis on Product Service
-        working-directory: ./product-service
-        run: |
-          chmod +x mvnw
-          ./mvnw spotbugs:check || echo "SpotBugs warnings found (optional)"
-          ./mvnw pmd:check || echo "PMD warnings found (optional)"
-          ./mvnw jacoco:report
-
-      - name: Run static analysis on Order Service
-        working-directory: ./order-service
-        run: |
-          chmod +x mvnw
-          ./mvnw spotbugs:check || echo "SpotBugs warnings found (optional)"
-          ./mvnw pmd:check || echo "PMD warnings found (optional)"
-          ./mvnw jacoco:report
-
-      - name: Upload coverage reports
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-reports
-          path: |
-            product-service/target/site/jacoco/
-            order-service/target/site/jacoco/
