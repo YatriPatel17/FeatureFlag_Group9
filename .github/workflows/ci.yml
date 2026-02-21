@@ -18,6 +18,13 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
       - name: Run Product Service Tests
+        working-directory: ./product-service
+        run: |
+          chmod +x mvnw
+          ./mvnw clean test
+
+      - name: Run Order Service Tests
+        working-directory: ./order-service
         run: |
           chmod +x mvnw
           ./mvnw clean test
