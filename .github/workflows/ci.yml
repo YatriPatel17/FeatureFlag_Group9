@@ -204,10 +204,28 @@ jobs:
           sudo chmod +x /usr/local/bin/docker-compose
           docker-compose --version
 
-      - name: Start Unleash and PostgreSQL
+      # ✅ FIX: Start ALL services, not just postgres and unleash
+      - name: Start all services
         run: |
-          docker-compose up -d postgres unleash-server
-          sleep 20
+          docker-compose up -d
+          echo "Waiting for services to start..."
+          sleep 30
+
+      - name: Wait for all services to be healthy
+        run: |
+          echo "Checking service health..."
+          for i in {1..30}; do
+            PRODUCT_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' product-service 2>/dev/null || echo "starting")
+            ORDER_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' order-service 2>/dev/null || echo "starting")
+
+            echo "Product: $PRODUCT_HEALTH, Order: $ORDER_HEALTH"
+
+            if [[ "$PRODUCT_HEALTH" == "healthy" && "$ORDER_HEALTH" == "healthy" ]]; then
+              echo "✅ All services are healthy!"
+              break
+            fi
+            sleep 5
+          done
 
       - name: Initialize feature flags
         run: |
@@ -302,7 +320,7 @@ jobs:
             echo "✅ Product service responding with fallback"
             echo "Response received"
           else
-            echo "❌ Product service failed"
+            echo "❌ Product service failed - no response"
             exit 1
           fi
 
