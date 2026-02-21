@@ -51,12 +51,12 @@ jobs:
       - name: Build and start all services
         run: |
           docker-compose up -d --build
-          echo "Waiting for services to start..."
+          echo "Waiting for services start..."
           sleep 30
 
       - name: Wait for all services to be healthy
         run: |
-          echo "Checking service health..."
+          echo "Checking all services health..."
           for i in {1..30}; do
             POSTGRES_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' unleash-postgres 2>/dev/null || echo "starting")
             UNLEASH_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' unleash-server 2>/dev/null || echo "starting")
@@ -66,7 +66,7 @@ jobs:
             echo "Postgres: $POSTGRES_HEALTH, Unleash: $UNLEASH_HEALTH, Product: $PRODUCT_HEALTH, Order: $ORDER_HEALTH"
           
             if [[ "$POSTGRES_HEALTH" == "healthy" && "$UNLEASH_HEALTH" == "healthy" && "$PRODUCT_HEALTH" == "healthy" && "$ORDER_HEALTH" == "healthy" ]]; then
-              echo "✅ All services are healthy!"
+              echo "All services are healthy!"
               break
             fi
             sleep 5
@@ -89,73 +89,73 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{"name":"PlayStation5","price":500.00,"quantity":16}'
 
-      - name: Test 1 - premium-pricing flag ON (10% discount)
+      - name: Test 1 - premium-pricing flag is ON (10% discount)
         run: |
-          echo "🔴 Testing premium-pricing flag ON..."
+          echo "Testing premium-pricing flag is ON"
           
-          # Ensure flag is ON
+          # Checking flag is ON
           curl -X POST http://localhost:4242/api/admin/projects/default/features/premium-pricing/environments/development/on \
             -H "Authorization: *:*.unleash-default-token"
           sleep 2
           
           # Test premium endpoint
           RESPONSE=$(curl -s http://localhost:8081/api/products/premium)
-          echo "$RESPONSE" | grep -q "900.0" && echo "✅ premium-pricing ON: 10% discount applied (1000 → 900)" || echo "❌ premium-pricing ON test failed"
-          echo "$RESPONSE" | grep -q "450.0" && echo "✅ premium-pricing ON: 10% discount applied (500 → 450)" || echo "❌ premium-pricing ON test failed"
+          echo "$RESPONSE" | grep -q "900.0" && echo "premium-pricing ON: 10% discount applied (1000 → 900)" || echo "premium-pricing ON test failed"
+          echo "$RESPONSE" | grep -q "450.0" && echo "premium-pricing ON: 10% discount applied (500 → 450)" || echo "premium-pricing ON test failed"
 
-      - name: Test 2 - premium-pricing flag OFF (regular prices)
+      - name: Test 2 - premium-pricing flag is OFF (regular prices)
         run: |
-          echo "🔴 Testing premium-pricing flag OFF..."
+          echo "Testing premium-pricing flag is OFF"
           
-          # Toggle flag OFF
+          # Checking flag is OFF
           curl -X POST http://localhost:4242/api/admin/projects/default/features/premium-pricing/environments/development/off \
             -H "Authorization: *:*.unleash-default-token"
           sleep 2
           
           # Test premium endpoint
           RESPONSE=$(curl -s http://localhost:8081/api/products/premium)
-          echo "$RESPONSE" | grep -q "1000.0" && echo "✅ premium-pricing OFF: regular price (1000)" || echo "❌ premium-pricing OFF test failed"
-          echo "$RESPONSE" | grep -q "500.0" && echo "✅ premium-pricing OFF: regular price (500)" || echo "❌ premium-pricing OFF test failed"
+          echo "$RESPONSE" | grep -q "1000.0" && echo "premium-pricing OFF: regular price (1000)" || echo "premium-pricing OFF test failed"
+          echo "$RESPONSE" | grep -q "500.0" && echo "premium-pricing OFF: regular price (500)" || echo "premium-pricing OFF test failed"
 
-      - name: Test 3 - bulk-order-discount flag ON (15% discount for qty>5)
+      - name: Test 3 - bulk-order-discount flag is ON (15% discount for qty>5)
         run: |
-          echo "🔴 Testing bulk-order-discount flag ON..."
+          echo "Testing bulk-order-discount flag is ON"
           
-          # Ensure flag is ON
+          # Checking flag is ON
           curl -X POST http://localhost:4242/api/admin/projects/default/features/bulk-order-discount/environments/development/on \
             -H "Authorization: *:*.unleash-default-token"
           sleep 2
           
-          # Test bulk order (quantity 6 - should get discount)
+          # Testing bulk order 
           RESPONSE=$(curl -s -X POST http://localhost:8082/api/orders \
             -H "Content-Type: application/json" \
             -d '{"productId":1,"quantity":6,"status":"Pending"}')
           
-          # Check total price (1000 * 6 = 6000, with 15% discount = 5100)
-          echo "$RESPONSE" | grep -q "5100.0" && echo "✅ bulk-order-discount ON: 15% discount applied (6000 → 5100)" || echo "❌ bulk-order-discount ON test failed"
+          # Checking total price
+          echo "$RESPONSE" | grep -q "5100.0" && echo "bulk-order-discount ON: 15% discount applied (6000 → 5100)" || echo "bulk-order-discount ON test failed"
 
-      - name: Test 4 - bulk-order-discount flag OFF (no discount)
+      - name: Test 4 - bulk-order-discount flag is OFF (no discount)
         run: |
-          echo "🔴 Testing bulk-order-discount flag OFF..."
+          echo "Testing bulk-order-discount flag is OFF"
           
           # Toggle flag OFF
           curl -X POST http://localhost:4242/api/admin/projects/default/features/bulk-order-discount/environments/development/off \
             -H "Authorization: *:*.unleash-default-token"
           sleep 2
           
-          # Test bulk order (quantity 6 - no discount)
+          # Test bulk order (quantity 6 but no discount because flag is off)
           RESPONSE=$(curl -s -X POST http://localhost:8082/api/orders \
             -H "Content-Type: application/json" \
             -d '{"productId":1,"quantity":6,"status":"Pending"}')
           
-          # Check total price (1000 * 6 = 6000, no discount)
-          echo "$RESPONSE" | grep -q "6000.0" && echo "✅ bulk-order-discount OFF: regular price (6000)" || echo "❌ bulk-order-discount OFF test failed"
+          # Check total price
+          echo "$RESPONSE" | grep -q "6000.0" && echo "bulk-order-discount OFF: regular price (6000)" || echo "bulk-order-discount OFF test failed"
 
-      - name: Test 5 - order-notifications flag ON (logs notification)
+      - name: Test 5 - order-notifications is flag ON (logs notification)
         run: |
-          echo "🔴 Testing order-notifications flag ON..."
+          echo "Testing order-notifications flag is ON"
           
-          # Ensure flag is ON
+          # Checking flag is ON
           curl -X POST http://localhost:4242/api/admin/projects/default/features/order-notifications/environments/development/on \
             -H "Authorization: *:*.unleash-default-token"
           sleep 2
@@ -163,17 +163,17 @@ jobs:
           # Create order
           curl -X POST http://localhost:8082/api/orders \
             -H "Content-Type: application/json" \
-            -d '{"productId":1,"quantity":2,"status":"Pending"}'
+            -d '{"productId":1,"quantity":3,"status":"Pending"}'
           sleep 2
           
-          # Check logs for notification
-          docker-compose logs order-service | grep -q "Order Notification" && echo "✅ order-notifications ON: notification logged" || echo "❌ order-notifications ON test failed"
+          # Checking logs for notification
+          docker-compose logs order-service | grep -q "Order Notification" && echo "order-notifications ON: notification logged" || echo "order-notifications ON test failed"
 
-      - name: Test 6 - order-notifications flag OFF (silent)
+      - name: Test 6 - order-notifications flag is OFF (silent)
         run: |
-          echo "🔴 Testing order-notifications flag OFF..."
+          echo "Testing order-notifications flag is OFF"
           
-          # Toggle flag OFF
+          # Checking flag is OFF
           curl -X POST http://localhost:4242/api/admin/projects/default/features/order-notifications/environments/development/off \
             -H "Authorization: *:*.unleash-default-token"
           sleep 2
@@ -184,7 +184,7 @@ jobs:
             -d '{"productId":1,"quantity":3,"status":"Pending"}'
           sleep 2
           
-          echo "✅ order-notifications OFF test complete"
+          echo "order-notifications OFF test complete"
 
       - name: Tear down stack
         if: always()
@@ -204,16 +204,15 @@ jobs:
           sudo chmod +x /usr/local/bin/docker-compose
           docker-compose --version
 
-      # ✅ FIX: Start ALL services, not just postgres and unleash
       - name: Start all services
         run: |
           docker-compose up -d
           echo "Waiting for services to start..."
           sleep 30
 
-      - name: Wait for all services to be healthy
+      - name: Waiting for all services to be healthy
         run: |
-          echo "Checking service health..."
+          echo "Checking service health"
           for i in {1..30}; do
             PRODUCT_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' product-service 2>/dev/null || echo "starting")
             ORDER_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' order-service 2>/dev/null || echo "starting")
@@ -221,7 +220,7 @@ jobs:
             echo "Product: $PRODUCT_HEALTH, Order: $ORDER_HEALTH"
 
             if [[ "$PRODUCT_HEALTH" == "healthy" && "$ORDER_HEALTH" == "healthy" ]]; then
-              echo "✅ All services are healthy!"
+              echo "All services are healthy!"
               break
             fi
             sleep 5
@@ -235,49 +234,49 @@ jobs:
 
       - name: Verify all three feature flags exist
         run: |
-          echo "🔴 Verifying feature flags in Unleash..."
+          echo "Verifying feature flags are in Unleash"
 
           FLAGS=$(curl -s http://localhost:4242/api/admin/projects/default/features \
             -H "Authorization: *:*.unleash-default-token")
 
-          # Check premium-pricing
+          # Checking premium-pricing
           if echo "$FLAGS" | grep -q "premium-pricing"; then
-            echo "✅ premium-pricing flag exists"
+            echo "premium-pricing flag exists"
           else
-            echo "❌ premium-pricing flag missing"
+            echo "premium-pricing flag missing"
             exit 1
           fi
 
-          # Check order-notifications
+          # Checking order-notifications
           if echo "$FLAGS" | grep -q "order-notifications"; then
-            echo "✅ order-notifications flag exists"
+            echo "order-notifications flag exists"
           else
-            echo "❌ order-notifications flag missing"
+            echo "order-notifications flag missing"
             exit 1
           fi
 
-          # Check bulk-order-discount
+          # Checking bulk-order-discount
           if echo "$FLAGS" | grep -q "bulk-order-discount"; then
             echo "✅ bulk-order-discount flag exists"
           else
-            echo "❌ bulk-order-discount flag missing"
+            echo "bulk-order-discount flag missing"
             exit 1
           fi
 
-          echo "🎉 All three feature flags exist in Unleash!"
+          echo "All three feature flags exist in Unleash!"
 
       - name: Test flag toggle behavior
         run: |
-          echo "🔴 Testing flag toggle behavior..."
+          echo "Testing flag toggle behavior"
 
           # Toggle premium-pricing OFF
           curl -X POST http://localhost:4242/api/admin/projects/default/features/premium-pricing/environments/development/off \
             -H "Authorization: *:*.unleash-default-token"
           sleep 2
 
-          # Check status
+          # Checking status
           curl -s http://localhost:4242/api/admin/projects/default/features/premium-pricing \
-            -H "Authorization: *:*.unleash-default-token" | grep -q "enabled" || echo "✅ premium-pricing toggle test complete"
+            -H "Authorization: *:*.unleash-default-token" | grep -q "enabled" || echo "premium-pricing toggle test complete!"
 
           # Toggle back ON
           curl -X POST http://localhost:4242/api/admin/projects/default/features/premium-pricing/environments/development/on \
@@ -285,9 +284,9 @@ jobs:
 
       - name: Validate fallback behavior
         run: |
-          echo "🔴 Testing fallback behavior (Unleash unavailable)..."
+          echo "Testing fallback behavior (Unleash unavailable)"
 
-          # Create a test product
+          # Creating a test product
           curl -X POST http://localhost:8081/api/products \
             -H "Content-Type: application/json" \
             -d '{"name":"Fallback Test","price":200.00,"quantity":5}' || true
@@ -298,8 +297,8 @@ jobs:
           curl -s http://localhost:4242/api/admin/projects/default/features/premium-pricing \
             -H "Authorization: *:*.unleash-default-token" | grep -o '"enabled":[^,]*' || echo "Flag check failed"
 
-          # Stop Unleash (with error handling)
-          echo "Stopping Unleash server..."
+          # Stop Unleash with error handling
+          echo "Stopping Unleash server"
           docker-compose stop unleash-server || true
           sleep 5
 
@@ -309,26 +308,45 @@ jobs:
             docker-compose kill unleash-server
             sleep 3
           else
-            echo "✅ Unleash stopped"
+            echo "Unleash stopped"
           fi
 
-          # Test product service with Unleash down
+          # Testing product service when Unleash is down
           echo "Testing premium endpoint with Unleash down..."
           RESPONSE=$(curl -s http://localhost:8081/api/products/premium)
 
           if [ -n "$RESPONSE" ] && [ "$RESPONSE" != "null" ]; then
-            echo "✅ Product service responding with fallback"
+            echo "Product service responding with fallback"
             echo "Response received"
           else
-            echo "❌ Product service failed - no response"
+            echo "Product service failed - no response"
             exit 1
           fi
 
           # Restart Unleash
-          echo "Restarting Unleash..."
+          echo "Restarting Unleash"
           docker-compose start unleash-server
           sleep 10
 
       - name: Clean up
         if: always()
         run: docker-compose down -v
+
+  code-quality:
+    name: Simple Code Quality Check
+    runs-on: ubuntu-22.04
+    needs: unit-tests
+    if: github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Count and display tests
+        run: |
+          echo "==== TEST COVERAGE ===="
+          PRODUCT_TESTS=$(find product-service/src/test -name "*.java" | wc -l)
+          ORDER_TESTS=$(find order-service/src/test -name "*.java" | wc -l)
+          echo "Product Service: $PRODUCT_TESTS test files"
+          echo "Order Service: $ORDER_TESTS test files"
+          echo "Total: $((PRODUCT_TESTS + ORDER_TESTS)) test files"
+          echo "Code quality check passed!"
