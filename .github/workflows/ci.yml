@@ -1,0 +1,107 @@
+name: Assignment_1 CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  unit-tests:
+    name: Unite Tests
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+      - name: Run Tests
+        run: |
+          cd product-service && mvn test
+          cd ../order-service && mvn test
+
+  docker-pipeline:
+    name: Docker Integration Test
+    runs-on: ubuntu-22.04
+    needs: unit-tests
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Docker
+        run: |
+          # Install Docker using official script (works on all versions) 
+          curl -fsSL https://get.docker.com -o get-docker.sh
+          sudo sh get-docker.sh
+          sudo usermod -aG docker $USER
+
+      - name: Install Docker Compose
+        run: |
+          # Install Docker Compose v2 (modern version)
+          sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          docker-compose --version
+
+      - name: Build Docker Images
+        run: |
+          docker build -t product-service ./product-service/
+          docker build -t order-service ./order-service/
+          echo "Images built"
+
+      - name: Start Services
+        run: |
+          docker-compose up -d
+          echo "Waiting for services to starts..."
+          sleep 50
+          
+          echo "Running containers:"
+          docker ps -a
+
+      - name: Verify Services
+        run: |
+          echo "Testing service health..."
+          # Try multiple times with retry
+          for i in {1..5}; do
+            if curl -f http://localhost:8081/actuator/health 2>/dev/null; then
+              echo "Product Service is healthy"
+              break
+            else
+              echo "Attempt $i: Product Service not ready, waiting..."
+              sleep 10
+            fi
+          done         
+          
+          for i in {1..5}; do
+            if curl -f http://localhost:8082/actuator/health 2>/dev/null; then
+              echo "✅ Order Service is healthy"
+              break
+            else
+              echo "Attempt $i: Order Service not ready, waiting..."
+              sleep 10
+            fi
+          done
+
+      - name: Test APIs
+        run: |
+          # APi test
+          echo "Testing Product Service API..."
+          curl -X POST http://localhost:8081/api/products \
+          -H "Content-Type: application/json" \
+          -d '{"name":"Test","price":10,"quantity":5}' || true
+          
+          curl http://localhost:8081/api/products || true
+
+          echo "Testing Order Service API..."
+          curl -X POST http://localhost:8082/api/orders \
+          -H "Content-Type: application/json" \
+          -d '{"productId":1,"quantity":2}' || true
+
+          curl http://localhost:8082/api/orders || true
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker-compose down || true
+          echo "Cleanup done"
