@@ -218,10 +218,10 @@ jobs:
       - name: Verify all three feature flags exist
         run: |
           echo "🔴 Verifying feature flags in Unleash..."
-          
+
           FLAGS=$(curl -s http://localhost:4242/api/admin/projects/default/features \
             -H "Authorization: *:*.unleash-default-token")
-          
+
           # Check premium-pricing
           if echo "$FLAGS" | grep -q "premium-pricing"; then
             echo "✅ premium-pricing flag exists"
@@ -229,7 +229,7 @@ jobs:
             echo "❌ premium-pricing flag missing"
             exit 1
           fi
-          
+
           # Check order-notifications
           if echo "$FLAGS" | grep -q "order-notifications"; then
             echo "✅ order-notifications flag exists"
@@ -237,7 +237,7 @@ jobs:
             echo "❌ order-notifications flag missing"
             exit 1
           fi
-          
+
           # Check bulk-order-discount
           if echo "$FLAGS" | grep -q "bulk-order-discount"; then
             echo "✅ bulk-order-discount flag exists"
@@ -245,21 +245,22 @@ jobs:
             echo "❌ bulk-order-discount flag missing"
             exit 1
           fi
-          
+
           echo "🎉 All three feature flags exist in Unleash!"
 
       - name: Test flag toggle behavior
         run: |
           echo "🔴 Testing flag toggle behavior..."
-          
+
           # Toggle premium-pricing OFF
           curl -X POST http://localhost:4242/api/admin/projects/default/features/premium-pricing/environments/development/off \
             -H "Authorization: *:*.unleash-default-token"
-          
+          sleep 2
+
           # Check status
           curl -s http://localhost:4242/api/admin/projects/default/features/premium-pricing \
-            -H "Authorization: *:*.unleash-default-token" | grep -q "enabled" && echo "✅ premium-pricing toggle test complete"
-          
+            -H "Authorization: *:*.unleash-default-token" | grep -q "enabled" || echo "✅ premium-pricing toggle test complete"
+
           # Toggle back ON
           curl -X POST http://localhost:4242/api/admin/projects/default/features/premium-pricing/environments/development/on \
             -H "Authorization: *:*.unleash-default-token"
@@ -267,21 +268,48 @@ jobs:
       - name: Validate fallback behavior
         run: |
           echo "🔴 Testing fallback behavior (Unleash unavailable)..."
-          
-          # Stop Unleash to simulate unavailability
-          docker-compose stop unleash-server
+
+          # Create a test product
+          curl -X POST http://localhost:8081/api/products \
+            -H "Content-Type: application/json" \
+            -d '{"name":"Fallback Test","price":200.00,"quantity":5}' || true
+          sleep 2
+
+          # Get current flag state
+          echo "Current flag state:"
+          curl -s http://localhost:4242/api/admin/projects/default/features/premium-pricing \
+            -H "Authorization: *:*.unleash-default-token" | grep -o '"enabled":[^,]*' || echo "Flag check failed"
+
+          # Stop Unleash (with error handling)
+          echo "Stopping Unleash server..."
+          docker-compose stop unleash-server || true
           sleep 5
-          
-          # Test product service with Unleash down (should use fallback)
-          RESPONSE=$(curl -s http://localhost:8081/api/products/premium)
-          if [ -n "$RESPONSE" ]; then
-            echo "✅ Product service working with fallback (Unleash down)"
+
+          # Force kill if still running
+          if curl -s -o /dev/null -w "%{http_code}" http://localhost:4242/health | grep -q "200"; then
+            echo "Unleash still running, forcing kill..."
+            docker-compose kill unleash-server
+            sleep 3
           else
-            echo "❌ Product service failed with Unleash down"
+            echo "✅ Unleash stopped"
           fi
-          
+
+          # Test product service with Unleash down
+          echo "Testing premium endpoint with Unleash down..."
+          RESPONSE=$(curl -s http://localhost:8081/api/products/premium)
+
+          if [ -n "$RESPONSE" ] && [ "$RESPONSE" != "null" ]; then
+            echo "✅ Product service responding with fallback"
+            echo "Response received"
+          else
+            echo "❌ Product service failed"
+            exit 1
+          fi
+
           # Restart Unleash
+          echo "Restarting Unleash..."
           docker-compose start unleash-server
+          sleep 10
 
       - name: Clean up
         if: always()
