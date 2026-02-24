@@ -11,13 +11,14 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/products")  // base url for all endpoints
+@RequestMapping("/api/products")
 public class ProductController {
 
     // Injecting product service dependency
     @Autowired
     private ProductService productService;
 
+    // Injecting FeatureFlagService to check feature flag is ON or OFF
     @Autowired
     private FeatureFlagService featureFlagService;
 
@@ -40,10 +41,12 @@ public class ProductController {
         }
     }
 
+    // Premium product endpoint with feature flag control
     @GetMapping("/premium")
     public ResponseEntity<List<Product>> getPremiumProducts() {
         List<Product> products = productService.getAllProducts();
 
+        // Checking premium pricing feature flag is enabled
         boolean isEnabled = featureFlagService.isPremiumPricingEnabled();
         System.out.println("Premium pricing flag is: " + isEnabled);
 

@@ -10,11 +10,13 @@ public class FeatureFlagService {
     private static final Logger logger= LoggerFactory.getLogger(FeatureFlagService.class);
     private final Unleash unleash;
 
+    // spring injects unleash client using constructor
     public FeatureFlagService(Unleash unleash) {
         this.unleash=unleash;
         logger.info("FeatureFlagService initialized for Product service");
     }
 
+    // Checking if premium pricing feature flag is enabled
     public boolean isPremiumPricingEnabled(){
         try{
             return unleash.isEnabled("premium-pricing", false);

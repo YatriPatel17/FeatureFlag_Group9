@@ -73,11 +73,12 @@ public class OrderService {
             // Calculating total price
             double totalPrice = product.getPrice() * orderRequest.getQuantity();
 
-           // Bulk order discount
+           // Bulk order discount if flag is enabled and quantity > 5
             boolean bulkDiscountEnabled = featureFlagService.isBulkOrderDiscountEnabled();
             boolean isBulkOrder = orderRequest.getQuantity() > 5;
 
             if (bulkDiscountEnabled && isBulkOrder) {
+                // Applying 15% discount
                 totalPrice = totalPrice * 0.85;
                 logger.info("Bulk order discount enabled with {} items", orderRequest.getQuantity());
             }
@@ -97,8 +98,8 @@ public class OrderService {
             );
 
             Order savedOrder = orderRepository.save(order);
-            //System.out.println("Order saved successfully: " + savedOrder.getId());
             logger.info("Order saved successfully: {} ", savedOrder.getId());
+            // Log order notification if flag is enabled
             if(featureFlagService.isOrderNotificationsEnabled()){
                 logger.info("==========Order Notification=============");
                 logger.info("Order ID: {}", savedOrder.getId());

@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class UnleashConfigBean {
 
+    // Configures the unleash client for feature flag
     @Bean
     public Unleash unleash(
         @Value("${unleash.api-url:http://localhost:4242/api}") String apiUrl,
@@ -18,6 +19,7 @@ public class UnleashConfigBean {
         @Value("${unleash.api-token:*:*.unleash-default-token}") String apiToken,
         @Value("${unleash.environment:development}") String environment
         ){
+        // Build Unleash configuration
         UnleashConfig config = UnleashConfig.builder()
                 .unleashAPI(apiUrl)
                 .appName(appName)
@@ -26,6 +28,7 @@ public class UnleashConfigBean {
                 .environment(environment)
                 .build();
 
+        // Create & return Unleash client
         return new DefaultUnleash(config);
     }
 

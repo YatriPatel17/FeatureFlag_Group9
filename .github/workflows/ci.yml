@@ -138,7 +138,7 @@ jobs:
         run: |
           echo "Testing bulk-order-discount flag is OFF"
           
-          # Toggle flag OFF
+          # Checking flag OFF
           curl -X POST http://localhost:4242/api/admin/projects/default/features/bulk-order-discount/environments/development/off \
             -H "Authorization: *:*.unleash-default-token"
           sleep 2
@@ -257,7 +257,7 @@ jobs:
 
           # Checking bulk-order-discount
           if echo "$FLAGS" | grep -q "bulk-order-discount"; then
-            echo "✅ bulk-order-discount flag exists"
+            echo "bulk-order-discount flag exists"
           else
             echo "bulk-order-discount flag missing"
             exit 1

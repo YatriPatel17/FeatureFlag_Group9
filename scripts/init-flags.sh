@@ -1,23 +1,23 @@
 #!/bin/bash
 
-# Color codes
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Configuration
+# Configuration - where unleash server live and the API token is use
 UNLEASH_URL="http://localhost:4242"
 TOKEN="*:*.unleash-default-token"
 
-# Function to create a feature flag
+# Function to create a new feature flag in Unleash
 create_flag() {
     local name=$1
     local description=$2
 
     echo -e "${BLUE}Creating flag: ${YELLOW}$name${NC}"
 
+    # Calling unleash API to create the flag
     response=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$UNLEASH_URL/api/admin/projects/default/features" \
         -H "Authorization: $TOKEN" \
         -H "Content-Type: application/json" \
@@ -36,12 +36,13 @@ create_flag() {
     fi
 }
 
-# Function to enable a feature flag
+# Function to enable a feature flag in development environment
 enable_flag() {
     local name=$1
 
     echo -e "${BLUE}Enabling flag: ${YELLOW}$name${NC}"
 
+    # Hit the Unleash to On the flag
     response=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
         "$UNLEASH_URL/api/admin/projects/default/features/$name/environments/development/on" \
         -H "Authorization: $TOKEN")
@@ -55,7 +56,7 @@ enable_flag() {
     fi
 }
 
-# Function to check if Unleash is ready
+# Function to checking Unleash is ready
 check_unleash() {
     echo -e "${BLUE}Checking if Unleash is ready...${NC}"
 
@@ -73,7 +74,7 @@ check_unleash() {
     return 1
 }
 
-# Function to verify flags exist
+# Function to verify flags exist or not
 verify_flags() {
     echo -e "\n${BLUE}Verifying flags:${NC}"
 
@@ -94,17 +95,17 @@ verify_flags() {
 
 # Main execution
 main() {
-    echo -e "${BLUE}================================${NC}"
-    echo -e "${BLUE}  Feature Flag Initialization   ${NC}"
-    echo -e "${BLUE}================================${NC}\n"
+    echo -e "${BLUE}=============================${NC}"
+    echo -e "${BLUE} Feature Flag Initialization ${NC}"
+    echo -e "${BLUE}=============================${NC}\n"
 
-    # Check if Unleash is ready
+    # Make sure Unleash is ready
     check_unleash || exit 1
 
     echo -e "\n${BLUE}Step 1: Creating flags${NC}"
-    echo -e "${BLUE}------------------------${NC}"
+    echo -e "${BLUE}----------------------${NC}"
 
-    # Create all three flags
+    # Creating all three flags
     create_flag "premium-pricing" "When enabled, applies a 10% discount to all product prices for premium users"
     create_flag "order-notifications" "When enabled, logs order confirmation notifications (simulating email/SMS)"
     create_flag "bulk-order-discount" "When enabled, applies a 15% discount when order quantity exceeds 5 items"
@@ -112,17 +113,16 @@ main() {
     echo -e "\n${BLUE}Step 2: Enabling flags${NC}"
     echo -e "${BLUE}------------------------${NC}"
 
-    # Enable all flags
+    # Enable all flags to use it
     enable_flag "premium-pricing"
     enable_flag "order-notifications"
     enable_flag "bulk-order-discount"
 
-    # Verify all flags
+    # Verifying all flags
     verify_flags
-
-    echo -e "\n${GREEN}================================${NC}"
-    echo -e "${GREEN}  Initialization Complete!      ${NC}"
-    echo -e "${GREEN}================================${NC}"
+    echo -e "\n${GREEN}=============================${NC}"
+    echo -e "${GREEN}  Initialization Complete!     ${NC}"
+    echo -e "${GREEN}===============================${NC}"
     echo -e "\n${BLUE}Access Unleash UI: ${YELLOW}http://localhost:4242${NC}"
     echo -e "${BLUE}Login: ${YELLOW}admin / unleash4all${NC}"
 }
